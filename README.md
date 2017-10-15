@@ -1,1 +1,1 @@
-#Bishop AI Plugin
+# Bishop AI Plugin
