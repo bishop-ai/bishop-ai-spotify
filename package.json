@@ -12,6 +12,9 @@
         "email": "nova706@gmail.com",
         "url": "http://www.davidpaulhamilton.net/"
     },
+    "homepage": "https://github.com/bishop-ai/bishop-ai-spotify",
+    "bugs": "https://github.com/bishop-ai/bishop-ai-spotify/issues",
+    "repository": "github:bishop-ai/bishop-ai-spotify",
     "dependencies": {
         "axios": "~0.16.2"
     }
