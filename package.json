@@ -1,6 +1,6 @@
 {
     "name": "bishop-ai-spotify",
-    "version": "0.1.0",
+    "version": "0.3.0",
     "description": "Control Spotify from Bishop-AI",
     "keywords": [
         "bishop-ai plugin",
@@ -14,8 +14,5 @@
     },
     "homepage": "https://github.com/bishop-ai/bishop-ai-spotify",
     "bugs": "https://github.com/bishop-ai/bishop-ai-spotify/issues",
-    "repository": "github:bishop-ai/bishop-ai-spotify",
-    "dependencies": {
-        "axios": "~0.16.2"
-    }
+    "repository": "github:bishop-ai/bishop-ai-spotify"
 }

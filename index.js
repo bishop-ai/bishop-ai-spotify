@@ -1,12 +1,9 @@
-var axios = require('axios');
-var querystring = require('querystring');
-
-axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
-axios.defaults.headers.common['Content-Type'] = 'application/json';
-
 var redirect = "http://localhost:3000/oauth.html";
 
-var Spotify = function (config) {
+var Spotify = function (config, axios) {
+
+    this.axios = axios;
+    var self = this;
 
     this.intent = [
         {value: "play [(the|my)] music", trigger: "spotify.play"},
@@ -32,37 +29,37 @@ var Spotify = function (config) {
             var artist = data.namedValues.artist;
             var album = data.namedValues.album;
 
-            Spotify.play(song, album, artist, utils.getMemory, utils.setMemory, config, function (response) {
+            self.play(song, album, artist, utils.getMemory, utils.setMemory, config, function (response) {
                 dfd.resolve(response);
             });
         },
         pause: function (dfd, expression, utils) {
-            Spotify.sendCmd(Spotify.commands.PAUSE, null, utils.getMemory, utils.setMemory, config, function (response) {
+            self.sendCmd(Spotify.commands.PAUSE, null, utils.getMemory, utils.setMemory, config, function (response) {
                 dfd.resolve(response);
             });
         },
         next: function (dfd, expression, utils) {
-            Spotify.sendCmd(Spotify.commands.NEXT, null, utils.getMemory, utils.setMemory, config, function (response) {
+            self.sendCmd(Spotify.commands.NEXT, null, utils.getMemory, utils.setMemory, config, function (response) {
                 dfd.resolve(response);
             });
         },
         previous: function (dfd, expression, utils) {
-            Spotify.sendCmd(Spotify.commands.PREV, null, utils.getMemory, utils.setMemory, config, function (response) {
+            self.sendCmd(Spotify.commands.PREV, null, utils.getMemory, utils.setMemory, config, function (response) {
                 dfd.resolve(response);
             });
         },
         last: function (dfd, expression, utils) {
-            Spotify.playLast(utils.getMemory, utils.setMemory, config, function (response) {
+            self.playLast(utils.getMemory, utils.setMemory, config, function (response) {
                 dfd.resolve(response);
             });
         },
         lastInfo: function (dfd, expression, utils) {
-            Spotify.getLastSongInfo(utils.getMemory, utils.setMemory, config, function (response) {
+            self.getLastSongInfo(utils.getMemory, utils.setMemory, config, function (response) {
                 dfd.resolve(response);
             });
         },
         currentInfo: function (dfd, expression, utils) {
-            Spotify.getCurrentSongInfo(utils.getMemory, utils.setMemory, config, function (response) {
+            self.getCurrentSongInfo(utils.getMemory, utils.setMemory, config, function (response) {
                 dfd.resolve(response);
             });
         }
@@ -109,23 +106,31 @@ var Spotify = function (config) {
             var authCode = getMemory("authCode");
 
             if (clientId && clientSecret && authCode) {
-                Spotify.getTokenFromAuth(clientId, clientSecret, authCode).then(function (response) {
-                    if (response.refreshToken) {
-                        setMemory("refreshToken", response.refreshToken);
-                        setMemory("authCode", null);
+                self.getTokenFromAuth(clientId, clientSecret, authCode, function (err, response) {
+                    if (err) {
+                        console.log(err);
+                    } else {
+                        if (response.refreshToken) {
+                            setMemory("refreshToken", response.refreshToken);
+                            setMemory("authCode", null);
+                        }
                     }
-                }, function (err) {
-                    console.log(err.message);
-                    console.log(JSON.stringify(err.response.data));
                 });
             }
         }
     };
 };
 
-Spotify.playFromData = function (token, callback, data, song, album, artist) {
-    axios.put("https://api.spotify.com/v1/me/player/play", data, {
-        headers: {'Authorization': 'Bearer ' + token}
+Spotify.prototype.playFromData = function (token, callback, data, song, album, artist) {
+    this.axios({
+        method: "put",
+        body: data,
+        url: "https://api.spotify.com/v1/me/player/play",
+        headers: {
+            'Authorization': 'Bearer ' + token,
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/json'
+        }
     }).then(function () {
         if (song && artist) {
             callback("Playing " + song + " by " + artist + "[ on Spotify].");
@@ -136,47 +141,57 @@ Spotify.playFromData = function (token, callback, data, song, album, artist) {
         } else {
             callback();
         }
-    }).catch(function (err) {
-        console.log(err.message);
-        console.log(JSON.stringify(err.response.data));
+    }).catch(function (error) {
+        console.log(error);
         callback("Sorry, something went wrong. Please make sure your Spotify plugin is set up correctly.");
     });
 };
 
-Spotify.getLastTrack = function (token, callback) {
-    axios.get("https://api.spotify.com/v1/me/player/recently-played?limit=1", {
-        headers: {'Authorization': 'Bearer ' + token}
+Spotify.prototype.getLastTrack = function (token, callback) {
+    this.axios({
+        method: "get",
+        url: "https://api.spotify.com/v1/me/player/recently-played?limit=1",
+        headers: {
+            'Authorization': 'Bearer ' + token,
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/json'
+        }
     }).then(function (response) {
         if (response.data.items && response.data.items.length > 0) {
             return callback(response.data.items[0].track);
         }
         callback(null);
-    }).catch(function (err) {
-        console.log(err.message);
-        console.log(JSON.stringify(err.response.data));
+    }).catch(function (error) {
+        console.log(error);
         callback();
     });
 };
 
-Spotify.getCurrentTrack = function (token, callback) {
-    axios.get("https://api.spotify.com/v1/me/player/currently-playing", {
-        headers: {'Authorization': 'Bearer ' + token}
+Spotify.prototype.getCurrentTrack = function (token, callback) {
+    this.axios({
+        method: "get",
+        url: "https://api.spotify.com/v1/me/player/currently-playing",
+        headers: {
+            'Authorization': 'Bearer ' + token,
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/json'
+        }
     }).then(function (response) {
         if (response.data.item) {
             return callback(response.data.item);
         }
         callback(null);
-    }).catch(function (err) {
-        console.log(err.message);
-        console.log(JSON.stringify(err.response.data));
+    }).catch(function (error) {
+        console.log(error);
         callback();
     });
 };
 
-Spotify.play = function (song, album, artist, getMemory, setMemory, config, callback) {
-    Spotify.getToken(getMemory, setMemory, config, function (err, token) {
+Spotify.prototype.play = function (song, album, artist, getMemory, setMemory, config, callback) {
+    var self = this;
+    this.getToken(getMemory, setMemory, config, function (err, token) {
         if (err) {
-            console.log(JSON.stringify(err.response.data));
+            console.log(err);
             callback("Sorry, something went wrong. Please make sure your Spotify plugin is set up correctly.");
             return;
         }
@@ -225,8 +240,14 @@ Spotify.play = function (song, album, artist, getMemory, setMemory, config, call
 
             var query = encodeURIComponent(queryParts.join(" "));
 
-            axios.get("https://api.spotify.com/v1/search?q=" + query + "&type=" + type + "&market=from_token&limit=1", {
-                headers: {'Authorization': 'Bearer ' + token}
+            self.axios({
+                method: "get",
+                url: "https://api.spotify.com/v1/search?q=" + query + "&type=" + type + "&market=from_token&limit=1",
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json'
+                }
             }).then(function (response) {
                 var data;
                 var resultSong;
@@ -238,7 +259,7 @@ Spotify.play = function (song, album, artist, getMemory, setMemory, config, call
                         data = {uris: [response.data.tracks.items[0].uri]};
                         resultSong = response.data.tracks.items[0].name;
                         resultArtist = response.data.tracks.items[0].artists[0].name;
-                        Spotify.playFromData(token, callback, data, resultSong, null, resultArtist);
+                        self.playFromData(token, callback, data, resultSong, null, resultArtist);
                     } else {
                         callback("I was unable to find the song " + song + "[ on Spotify].");
                     }
@@ -247,7 +268,7 @@ Spotify.play = function (song, album, artist, getMemory, setMemory, config, call
                         data = {context_uri: response.data.albums.items[0].uri};
                         resultArtist = response.data.albums.items[0].artists[0].name;
                         resultAlbum = response.data.albums.items[0].name;
-                        Spotify.playFromData(token, callback, data, null, resultAlbum, resultArtist);
+                        self.playFromData(token, callback, data, null, resultAlbum, resultArtist);
                     } else {
                         callback("I was unable to find the album " + album + "[ on Spotify].");
                     }
@@ -255,37 +276,37 @@ Spotify.play = function (song, album, artist, getMemory, setMemory, config, call
                     if (response.data.artists && response.data.artists.items.length > 0) {
                         data = {context_uri: response.data.artists.items[0].uri};
                         resultArtist = response.data.artists.items[0].name;
-                        Spotify.playFromData(token, callback, data, resultArtist);
+                        self.playFromData(token, callback, data, resultArtist);
                     } else {
                         callback("I was unable to find the artist " + artist + "[ on Spotify].");
                     }
                 }
-            }).catch(function (err) {
-                console.log(err.message);
-                console.log(JSON.stringify(err.response.data));
+            }).catch(function (error) {
+                console.log(error);
                 callback("Sorry, something went wrong. Please make sure your Spotify plugin is set up correctly.");
             });
         } else {
-            Spotify.playFromData(token, callback);
+            self.playFromData(token, callback);
         }
 
     });
 };
 
-Spotify.playLast = function (getMemory, setMemory, config, callback) {
-    Spotify.getToken(getMemory, setMemory, config, function (err, token) {
+Spotify.prototype.playLast = function (getMemory, setMemory, config, callback) {
+    var self = this;
+    this.getToken(getMemory, setMemory, config, function (err, token) {
         if (err) {
-            console.log(JSON.stringify(err.response.data));
+            console.log(err);
             callback("Sorry, something went wrong. Please make sure your Spotify plugin is set up correctly.");
             return;
         }
 
-        Spotify.getLastTrack(token, function (track) {
+        self.getLastTrack(token, function (track) {
             if (track) {
                 var data = {uris: [track.uri]};
                 var resultSong = track.name;
                 var resultArtist = track.artists[0].name;
-                Spotify.playFromData(token, callback, data, resultSong, null, resultArtist);
+                self.playFromData(token, callback, data, resultSong, null, resultArtist);
             } else if (track === null) {
                 callback("I was unable to determine what song was last played[ on Spotify].");
             } else {
@@ -295,15 +316,16 @@ Spotify.playLast = function (getMemory, setMemory, config, callback) {
     });
 };
 
-Spotify.getLastSongInfo = function (getMemory, setMemory, config, callback) {
-    Spotify.getToken(getMemory, setMemory, config, function (err, token) {
+Spotify.prototype.getLastSongInfo = function (getMemory, setMemory, config, callback) {
+    var self = this;
+    this.getToken(getMemory, setMemory, config, function (err, token) {
         if (err) {
-            console.log(JSON.stringify(err.response.data));
+            console.log(err);
             callback("Sorry, something went wrong. Please make sure your Spotify plugin is set up correctly.");
             return;
         }
 
-        Spotify.getLastTrack(token, function (track) {
+        self.getLastTrack(token, function (track) {
             if (track) {
                 var resultSong = track.name;
                 var resultArtist = track.artists[0].name;
@@ -317,15 +339,16 @@ Spotify.getLastSongInfo = function (getMemory, setMemory, config, callback) {
     });
 };
 
-Spotify.getCurrentSongInfo = function (getMemory, setMemory, config, callback) {
-    Spotify.getToken(getMemory, setMemory, config, function (err, token) {
+Spotify.prototype.getCurrentSongInfo = function (getMemory, setMemory, config, callback) {
+    var self = this;
+    this.getToken(getMemory, setMemory, config, function (err, token) {
         if (err) {
-            console.log(JSON.stringify(err.response.data));
+            console.log(err);
             callback("Sorry, something went wrong. Please make sure your Spotify plugin is set up correctly.");
             return;
         }
 
-        Spotify.getCurrentTrack(token, function (track) {
+        self.getCurrentTrack(token, function (track) {
             if (track) {
                 var resultSong = track.name;
                 var resultArtist = track.artists[0].name;
@@ -339,41 +362,68 @@ Spotify.getCurrentSongInfo = function (getMemory, setMemory, config, callback) {
     });
 };
 
-Spotify.sendCmd = function (commandCode, data, getMemory, setMemory, config, callback) {
-    Spotify.getToken(getMemory, setMemory, config, function (err, token) {
+Spotify.prototype.sendCmd = function (commandCode, data, getMemory, setMemory, config, callback) {
+    var self = this;
+    this.getToken(getMemory, setMemory, config, function (err, token) {
 
         if (err) {
-            console.log(err.message);
-            console.log(JSON.stringify(err.response.data));
+            console.log(err);
             callback("Sorry, something went wrong. Please make sure your Spotify plugin is set up correctly.");
             return;
         }
 
-        var handleError = function (err) {
-            console.log(err.message);
-            console.log(JSON.stringify(err.response.data));
+        var handleError = function (error) {
+            console.log(error);
             callback("Sorry, something went wrong. Please make sure your Spotify plugin is set up correctly.");
         };
 
         switch (commandCode) {
         case Spotify.commands.NEXT:
-            axios.post("https://api.spotify.com/v1/me/player/next", null, {
-                headers: {'Authorization': 'Bearer ' + token}
+            self.axios({
+                method: "post",
+                data: null,
+                url: "https://api.spotify.com/v1/me/player/next",
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json'
+                }
             }).catch(handleError);
             break;
         case Spotify.commands.PREV:
-            axios.post("https://api.spotify.com/v1/me/player/previous", null, {
-                headers: {'Authorization': 'Bearer ' + token}
+            self.axios({
+                method: "post",
+                data: null,
+                url: "https://api.spotify.com/v1/me/player/previous",
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json'
+                }
             }).catch(handleError);
             break;
         case Spotify.commands.PLAY:
-            axios.put("https://api.spotify.com/v1/me/player/play", data, {
-                headers: {'Authorization': 'Bearer ' + token}
+            self.axios({
+                method: "post",
+                data: data,
+                url: "https://api.spotify.com/v1/me/player/play",
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json'
+                }
             }).catch(handleError);
             break;
         case Spotify.commands.PAUSE:
-            axios.put("https://api.spotify.com/v1/me/player/pause", null, {
-                headers: {'Authorization': 'Bearer ' + token}
+            self.axios({
+                method: "post",
+                data: null,
+                url: "https://api.spotify.com/v1/me/player/pause",
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json'
+                }
             }).catch(handleError);
             break;
         }
@@ -381,72 +431,67 @@ Spotify.sendCmd = function (commandCode, data, getMemory, setMemory, config, cal
     });
 };
 
-Spotify.getTokenFromAuth = function (clientId, clientSecret, authCode) {
-
-    var data = querystring.stringify({
-        grant_type: "authorization_code",
-        code: authCode,
-        redirect_uri: redirect,
-        client_id: clientId,
-        client_secret: clientSecret
-    });
-
-    return axios.post("https://accounts.spotify.com/api/token", data, {
+Spotify.prototype.getTokenFromAuth = function (clientId, clientSecret, authCode, callback) {
+    this.axios({
+        method: "post",
+        data: "grant_type=authorization_code&code=" + authCode + "&redirect_uri=" + redirect + "&client_id=" + clientId + "&client_secret=" + clientSecret,
+        url: "https://accounts.spotify.com/api/token",
         headers: {
-            'Content-Type':'application/x-www-form-urlencoded'
+            'Content-Type':'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest'
         }
     }).then(function (response) {
-        return {token: response.data.access_token, refreshToken: response.data.refresh_token};
+        callback(null, {token: response.data.access_token, refreshToken: response.data.refresh_token});
     }).catch(function (error) {
-        throw error;
+        callback(error);
     });
 };
 
-Spotify.getTokenFromRefresh = function (clientId, clientSecret, refreshToken) {
-
-    var data = querystring.stringify({
-        grant_type: "refresh_token",
-        refresh_token: refreshToken,
-        client_id: clientId,
-        client_secret: clientSecret
-    });
-
-    return axios.post("https://accounts.spotify.com/api/token", data, {
+Spotify.prototype.getTokenFromRefresh = function (clientId, clientSecret, refreshToken, callback) {
+    this.axios({
+        method: "post",
+        data: "grant_type=refresh_token&refresh_token=" + refreshToken + "&client_id=" + clientId + "&client_secret=" + clientSecret,
+        url: "https://accounts.spotify.com/api/token",
         headers: {
-            'Content-Type':'application/x-www-form-urlencoded'
+            'Content-Type':'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest'
         }
     }).then(function (response) {
-        return {token: response.data.access_token, refreshToken: response.data.refresh_token};
+        callback(null, {token: response.data.access_token, refreshToken: response.data.refresh_token});
     }).catch(function (error) {
-        throw error;
+        callback(error);
     });
 };
 
-Spotify.getToken = function (getMemory, setMemory, config, callback) {
+Spotify.prototype.getToken = function (getMemory, setMemory, config, callback) {
     var clientId = config.clientId || getMemory("clientId");
     var clientSecret = config.clientSecret || getMemory("clientSecret");
     var authCode = getMemory("authCode");
     var refreshToken = getMemory("refreshToken");
 
     if (refreshToken) {
-        Spotify.getTokenFromRefresh(clientId, clientSecret, refreshToken).then(function (response) {
-            if (response.refreshToken) {
-                setMemory("refreshToken", response.refreshToken);
-                setMemory("authCode", null);
+        this.getTokenFromRefresh(clientId, clientSecret, refreshToken, function (err, response) {
+            if (err) {
+                callback(err);
+            } else {
+                if (response.refreshToken) {
+                    setMemory("refreshToken", response.refreshToken);
+                    setMemory("authCode", null);
+                }
+                callback(null, response.token);
             }
-            callback(null, response.token);
-        }, function (err) {
-            callback(err);
         });
     } else {
-        Spotify.getTokenFromAuth(clientId, clientSecret, authCode).then(function (response) {
-            if (response.refreshToken) {
-                setMemory("refreshToken", response.refreshToken);
-                setMemory("authCode", null);
+        this.getTokenFromAuth(clientId, clientSecret, authCode, function (err, response) {
+            if (err) {
+                callback(err);
+            } else {
+                if (response.refreshToken) {
+                    setMemory("refreshToken", response.refreshToken);
+                    setMemory("authCode", null);
+                }
+                callback(null, response.token);
             }
-            callback(null, response.token);
-        }, function (err) {
-            callback(err);
         });
     }
 };
@@ -460,6 +505,7 @@ Spotify.commands = {
 
 module.exports = {
     namespace: 'spotify',
+    description: 'Control music playback on Spotify',
     examples: [
         "Play Stairway to Heaven by Led Zeppelin on Spotify",
         "Play the next song",
@@ -467,7 +513,7 @@ module.exports = {
         "Play the artist Oh Wonder",
         "Play the album The Wall by Pink Floyd on Spotify"
     ],
-    register: function (config) {
-        return new Spotify(config);
+    register: function (config, nlp, axios) {
+        return new Spotify(config, axios);
     }
 };
